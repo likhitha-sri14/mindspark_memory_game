@@ -1,0 +1,6 @@
+{
+  "name": "MindSpark — Memory Challenge",
+  "description": "Train your brain and test your memory in MindSpark, a responsive cosmic memory puzzle game with multi-level campaign, adaptive scoring, hints, and Web Audio effects.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

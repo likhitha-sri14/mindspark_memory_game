@@ -11,18 +11,22 @@ import {
   CardItem,
   GameResult,
   PlayerProgress,
+  DifficultyConfig,
 } from './types/game';
 import {
   DIFFICULTY_CONFIGS,
   SCORING,
+  getLevelConfig,
   generateDeck,
   calculateStars,
+  calculateCoinRewards,
 } from './utils/gameLogic';
 import {
   loadPlayerProgress,
   savePlayerProgress,
   resetPlayerProgress,
   recordGameVictory,
+  checkDailyStreakStatus,
 } from './utils/storage';
 import { soundManager } from './utils/audio';
 
@@ -35,6 +39,7 @@ import { PauseModal } from './components/PauseModal';
 import { ResultsModal } from './components/ResultsModal';
 import { HowToPlayModal } from './components/HowToPlayModal';
 import { SettingsModal } from './components/SettingsModal';
+import { StreakModal } from './components/StreakModal';
 
 export default function App() {
   // Global player progress loaded from localStorage
@@ -48,7 +53,8 @@ export default function App() {
   const [screen, setScreen] = useState<GameScreen>('HOME');
 
   // Gameplay state
-  const [currentDifficulty, setCurrentDifficulty] = useState<Difficulty>('easy');
+  const [currentLevelNumber, setCurrentLevelNumber] = useState<number>(1);
+  const [activeConfig, setActiveConfig] = useState<DifficultyConfig>(() => getLevelConfig(1));
   const [gameStatus, setGameStatus] = useState<GameStatus>('IDLE');
   const [cards, setCards] = useState<CardItem[]>([]);
   const [flippedCards, setFlippedCards] = useState<CardItem[]>([]);
@@ -60,6 +66,7 @@ export default function App() {
   const [matchedPairs, setMatchedPairs] = useState<number>(0);
   const [timeRemaining, setTimeRemaining] = useState<number>(90);
   const [hintsRemaining, setHintsRemaining] = useState<number>(3);
+  const [hintsUsedCount, setHintsUsedCount] = useState<number>(0);
 
   // Result modal state
   const [activeResult, setActiveResult] = useState<GameResult | null>(null);
@@ -67,15 +74,28 @@ export default function App() {
   // Auxiliary modals
   const [showHowToPlay, setShowHowToPlay] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [showStreakModal, setShowStreakModal] = useState<boolean>(false);
 
   // Timer reference
   const timerRef = useRef<number | null>(null);
 
-  // Initialize or start game
-  const startNewGame = useCallback((diff: Difficulty) => {
-    const config = DIFFICULTY_CONFIGS[diff];
-    setCurrentDifficulty(diff);
-    setCards(generateDeck(diff));
+  // Initialize or start game (supports any level number or legacy difficulty string)
+  const startNewGame = useCallback((levelOrDifficulty: Difficulty | number) => {
+    let targetLevel = 1;
+    if (typeof levelOrDifficulty === 'number') {
+      targetLevel = levelOrDifficulty;
+    } else if (levelOrDifficulty === 'easy') {
+      targetLevel = 1;
+    } else if (levelOrDifficulty === 'medium') {
+      targetLevel = 2;
+    } else if (levelOrDifficulty === 'hard') {
+      targetLevel = 3;
+    }
+
+    const config = getLevelConfig(targetLevel);
+    setCurrentLevelNumber(targetLevel);
+    setActiveConfig(config);
+    setCards(generateDeck(config));
     setFlippedCards([]);
     setIsBusy(false);
     setScore(0);
@@ -83,6 +103,7 @@ export default function App() {
     setMatchedPairs(0);
     setTimeRemaining(config.timerSeconds);
     setHintsRemaining(config.hintsCount);
+    setHintsUsedCount(0);
     setActiveResult(null);
     setGameStatus('PLAYING');
     setScreen('PLAYING');
@@ -124,19 +145,18 @@ export default function App() {
             soundManager.playGameOver();
             setGameStatus('GAME_OVER');
 
-            const config = DIFFICULTY_CONFIGS[currentDifficulty];
             setActiveResult({
               isVictory: false,
-              difficulty: currentDifficulty,
-              levelNumber: config.levelNumber,
+              difficulty: activeConfig.key,
+              levelNumber: currentLevelNumber,
               score,
               baseScore: score,
               timeBonus: 0,
               moves,
               matchedPairs,
-              totalPairs: config.pairsCount,
+              totalPairs: activeConfig.pairsCount,
               timeRemaining: 0,
-              timeElapsed: config.timerSeconds,
+              timeElapsed: activeConfig.timerSeconds,
               starsEarned: 0,
               isNewBestScore: false,
               isNewBestTime: false,
@@ -160,7 +180,7 @@ export default function App() {
         timerRef.current = null;
       }
     };
-  }, [gameStatus, currentDifficulty, score, moves, matchedPairs]);
+  }, [gameStatus, activeConfig, currentLevelNumber, score, moves, matchedPairs]);
 
   // Flip card handler
   const handleFlipCard = useCallback((clickedCard: CardItem) => {
@@ -205,49 +225,65 @@ export default function App() {
         setFlippedCards([]);
 
         // Check Victory condition
-        const config = DIFFICULTY_CONFIGS[currentDifficulty];
-        if (nextMatched === config.pairsCount) {
+        if (nextMatched === activeConfig.pairsCount) {
           // VICTORY!
           if (timerRef.current) clearInterval(timerRef.current);
           setGameStatus('VICTORY');
 
           const timeBonus = timeRemaining * SCORING.TIME_BONUS_PER_SECOND;
           const finalScore = nextScore + timeBonus;
-          const starsEarned = calculateStars(currentDifficulty, nextMoves, timeRemaining);
+          const starsEarned = calculateStars(activeConfig, nextMoves, timeRemaining);
 
           soundManager.playVictory();
 
+          // Evaluate Daily Streak status for potential milestone bonus
+          const streakStatus = checkDailyStreakStatus(progress);
+
+          // Calculate deterministic MindCoins rewards
+          const coinRewards = calculateCoinRewards(
+            activeConfig.pairsCount,
+            nextMoves,
+            timeRemaining,
+            activeConfig.timerSeconds,
+            hintsUsedCount,
+            streakStatus.potentialMilestoneReward
+          );
+
+          // Commit victory and rewards persistently (executed exactly once)
           const {
             progress: updatedProgress,
             isNewBestScore,
             isNewBestTime,
             nextLevelUnlocked,
+            streakUpdated,
           } = recordGameVictory(
-            currentDifficulty,
-            config.levelNumber,
+            currentLevelNumber,
             finalScore,
             timeRemaining,
-            starsEarned
+            starsEarned,
+            coinRewards
           );
 
           setProgress(updatedProgress);
 
           setActiveResult({
             isVictory: true,
-            difficulty: currentDifficulty,
-            levelNumber: config.levelNumber,
+            difficulty: activeConfig.key,
+            levelNumber: currentLevelNumber,
             score: finalScore,
             baseScore: nextScore,
             timeBonus,
             moves: nextMoves,
             matchedPairs: nextMatched,
-            totalPairs: config.pairsCount,
+            totalPairs: activeConfig.pairsCount,
             timeRemaining,
-            timeElapsed: config.timerSeconds - timeRemaining,
+            timeElapsed: activeConfig.timerSeconds - timeRemaining,
             starsEarned,
             isNewBestScore,
             isNewBestTime,
             nextLevelUnlocked,
+            coinRewards,
+            streakUpdated,
           });
         }
       } else {
@@ -270,7 +306,7 @@ export default function App() {
         }, 900);
       }
     }
-  }, [cards, flippedCards, gameStatus, isBusy, moves, score, matchedPairs, currentDifficulty, timeRemaining]);
+  }, [cards, flippedCards, gameStatus, isBusy, moves, score, matchedPairs, activeConfig, currentLevelNumber, timeRemaining, hintsUsedCount, progress]);
 
   // Hint logic: find an unmatched pair and briefly reveal it
   const handleUseHint = useCallback(() => {
@@ -297,6 +333,7 @@ export default function App() {
 
     soundManager.playHint();
     setHintsRemaining((prev) => Math.max(0, prev - 1));
+    setHintsUsedCount((prev) => prev + 1);
     setScore((prev) => Math.max(0, prev - SCORING.HINT_PENALTY));
     setIsBusy(true);
 
@@ -343,6 +380,8 @@ export default function App() {
           setShowHowToPlay(false);
         } else if (showSettings) {
           setShowSettings(false);
+        } else if (showStreakModal) {
+          setShowStreakModal(false);
         } else if (screen === 'PLAYING') {
           if (gameStatus === 'PLAYING') {
             handlePause();
@@ -354,19 +393,12 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showHowToPlay, showSettings, screen, gameStatus, handlePause, handleResume]);
+  }, [showHowToPlay, showSettings, showStreakModal, screen, gameStatus, handlePause, handleResume]);
 
-  // Next level navigation
+  // Next level navigation (supports unlimited progression: Level 1 -> 2 -> 3 -> 4 -> 5...)
   const handleNextLevel = useCallback(() => {
-    if (currentDifficulty === 'easy') {
-      startNewGame('medium');
-    } else if (currentDifficulty === 'medium') {
-      startNewGame('hard');
-    }
-  }, [currentDifficulty, startNewGame]);
-
-  // Current difficulty config
-  const activeConfig = DIFFICULTY_CONFIGS[currentDifficulty];
+    startNewGame(currentLevelNumber + 1);
+  }, [currentLevelNumber, startNewGame]);
 
   // Atmosphere theme class
   let themeBackground = 'bg-[#090b16]';
@@ -384,12 +416,15 @@ export default function App() {
         onToggleSound={handleToggleSound}
         onOpenHowToPlay={() => setShowHowToPlay(true)}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenStreakDetails={() => setShowStreakModal(true)}
         onGoHome={() => {
           setGameStatus('IDLE');
           setScreen('HOME');
         }}
         highScore={progress.highScore}
         highestLevel={progress.highestUnlockedLevel}
+        coins={progress.coins}
+        currentStreak={progress.currentStreak}
       />
 
       {/* Main View Area */}
@@ -401,6 +436,7 @@ export default function App() {
             onOpenDifficultySelect={() => setScreen('DIFFICULTY_SELECT')}
             onOpenHowToPlay={() => setShowHowToPlay(true)}
             onOpenSettings={() => setShowSettings(true)}
+            onOpenStreakDetails={() => setShowStreakModal(true)}
             onToggleSound={handleToggleSound}
           />
         )}
@@ -408,7 +444,8 @@ export default function App() {
         {screen === 'DIFFICULTY_SELECT' && (
           <DifficultySelector
             progress={progress}
-            onSelectDifficulty={startNewGame}
+            onSelectLevel={(lvl) => startNewGame(lvl)}
+            onSelectDifficulty={(diff) => startNewGame(diff)}
             onBack={() => setScreen('HOME')}
           />
         )}
@@ -423,9 +460,10 @@ export default function App() {
               matchedPairs={matchedPairs}
               hintsRemaining={hintsRemaining}
               canUseHint={hintsRemaining > 0 && !isBusy && gameStatus === 'PLAYING'}
+              coins={progress.coins}
               onUseHint={handleUseHint}
               onPause={handlePause}
-              onRestart={() => startNewGame(currentDifficulty)}
+              onRestart={() => startNewGame(currentLevelNumber)}
             />
 
             <GameBoard
@@ -448,7 +486,7 @@ export default function App() {
           totalPairs={activeConfig.pairsCount}
           moves={moves}
           onResume={handleResume}
-          onRestart={() => startNewGame(currentDifficulty)}
+          onRestart={() => startNewGame(currentLevelNumber)}
           onGoHome={() => {
             setGameStatus('IDLE');
             setScreen('HOME');
@@ -460,7 +498,8 @@ export default function App() {
       {activeResult && (gameStatus === 'VICTORY' || gameStatus === 'GAME_OVER') && (
         <ResultsModal
           result={activeResult}
-          onPlayAgain={() => startNewGame(currentDifficulty)}
+          currentCoinsBalance={progress.coins}
+          onPlayAgain={() => startNewGame(currentLevelNumber)}
           onNextLevel={handleNextLevel}
           onGoHome={() => {
             setGameStatus('IDLE');
@@ -481,6 +520,14 @@ export default function App() {
           onUpdateProgress={handleUpdateProgress}
           onResetProgress={handleResetProgress}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* Daily Streak Details Modal */}
+      {showStreakModal && (
+        <StreakModal
+          progress={progress}
+          onClose={() => setShowStreakModal(false)}
         />
       )}
     </div>

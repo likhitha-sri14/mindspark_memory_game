@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, HelpCircle, Settings as SettingsIcon, Trophy, Star, ShieldCheck, Zap, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { Play, HelpCircle, Settings as SettingsIcon, Trophy, Zap, Volume2, VolumeX, Flame, Coins } from 'lucide-react';
 import { PlayerProgress, Difficulty } from '../types/game';
 import { soundManager } from '../utils/audio';
 import emblemImg from '../assets/images/mindspark_game_emblem_1791741763792.jpg';
@@ -10,6 +10,7 @@ interface HomeScreenProps {
   onOpenDifficultySelect: () => void;
   onOpenHowToPlay: () => void;
   onOpenSettings: () => void;
+  onOpenStreakDetails: () => void;
   onToggleSound: () => void;
 }
 
@@ -19,10 +20,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenDifficultySelect,
   onOpenHowToPlay,
   onOpenSettings,
+  onOpenStreakDetails,
   onToggleSound,
 }) => {
-  const totalStars = Object.values(progress.starsByLevel).reduce((acc, curr) => acc + curr, 0);
-
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center py-8 px-4 sm:px-6 relative overflow-hidden">
       {/* Ambient background glow accents */}
@@ -54,12 +54,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             Train Your Brain. Beat Your Best.
           </p>
           <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto pt-1">
-            Test and sharpen your visual recall, cognitive reflexes, and concentration across 3 progressive memory trials.
+            Test and sharpen your visual recall, cognitive reflexes, and concentration across progressive memory trials with unlimited level challenges.
           </p>
         </div>
 
-        {/* Stats Strip */}
-        <div className="w-full max-w-lg grid grid-cols-3 gap-2.5 sm:gap-4 mb-8">
+        {/* Stats Strip with MindCoins and Daily Streak */}
+        <div className="w-full max-w-xl grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-8">
           {/* Best Score */}
           <div className="rounded-xl bg-slate-900/60 border border-indigo-900/40 p-3 flex flex-col items-center backdrop-blur-sm shadow-md">
             <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-amber-400 mb-0.5">
@@ -82,16 +82,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
           </div>
 
-          {/* Total Stars */}
+          {/* MindCoins */}
           <div className="rounded-xl bg-slate-900/60 border border-indigo-900/40 p-3 flex flex-col items-center backdrop-blur-sm shadow-md">
-            <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-purple-400 mb-0.5">
-              <Star className="w-3.5 h-3.5 fill-purple-400" />
-              <span>Stars Won</span>
+            <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-yellow-400 mb-0.5">
+              <Coins className="w-3.5 h-3.5" />
+              <span>MindCoins</span>
             </div>
-            <div className="font-display font-bold text-xl sm:text-2xl text-purple-200 tabular-nums">
-              {totalStars} / 9
+            <div className="font-display font-bold text-xl sm:text-2xl text-yellow-300 tabular-nums">
+              {progress.coins}
             </div>
           </div>
+
+          {/* Daily Streak */}
+          <button
+            onClick={() => {
+              soundManager.playClick();
+              onOpenStreakDetails();
+            }}
+            className="rounded-xl bg-slate-900/60 hover:bg-orange-950/30 border border-indigo-900/40 hover:border-orange-500/40 p-3 flex flex-col items-center backdrop-blur-sm shadow-md transition-colors text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+            title="View Daily Streak rewards"
+          >
+            <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-orange-400 mb-0.5">
+              <Flame className="w-3.5 h-3.5 fill-orange-400" />
+              <span>Daily Streak</span>
+            </div>
+            <div className="font-display font-bold text-xl sm:text-2xl text-orange-300 tabular-nums">
+              {progress.currentStreak} {progress.currentStreak === 1 ? 'Day' : 'Days'}
+            </div>
+          </button>
         </div>
 
         {/* Primary Interactive CTA Buttons */}
@@ -143,7 +161,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               }}
               className="text-cyan-400 hover:text-cyan-300 transition-colors"
             >
-              View Campaign &rarr;
+              View All Levels &rarr;
             </button>
           </div>
 
@@ -230,7 +248,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <span>Audio SFX: {progress.soundEnabled ? 'Enabled' : 'Muted'}</span>
           </button>
           <span>·</span>
-          <span>Keyboard shortcuts enabled</span>
+          <span>Win levels to earn MindCoins & streaks</span>
         </div>
       </div>
     </div>

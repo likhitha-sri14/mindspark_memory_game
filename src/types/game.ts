@@ -26,9 +26,10 @@ export interface CardItem {
 }
 
 export interface DifficultyConfig {
-  key: Difficulty;
+  key: string;
   levelNumber: number;
   name: string;
+  tierTitle?: string;
   description: string;
   cols: number;
   rows: number;
@@ -41,21 +42,44 @@ export interface DifficultyConfig {
   threeStarMinTimeSec: number;
 }
 
+export interface CoinRewardBreakdown {
+  baseCoins: number; // 20
+  timeBonusCoins: number; // 0 to 15
+  movesBonusCoins: number; // 0 to 10
+  hintFreeBonusCoins: number; // 0 or 5
+  performanceBonus: number; // up to 30
+  levelTotalCoins: number; // 20 to 50
+  streakBonusCoins: number; // streak milestone bonus
+  totalCoinsAwarded: number; // levelTotalCoins + streakBonusCoins
+}
+
 export interface PlayerProgress {
   highScore: number;
-  highestUnlockedLevel: number; // 1: easy, 2: medium, 3: hard
-  bestScoresByDifficulty: Record<Difficulty, number>;
-  bestTimesByDifficulty: Record<Difficulty, number>; // in seconds
-  starsByLevel: Record<number, number>; // 1 -> 3, 2 -> 2, etc.
+  highestUnlockedLevel: number; // Unlimited level progression (1, 2, 3, 4, ...)
+  bestScoresByDifficulty: Record<Difficulty, number>; // Backward compatibility
+  bestTimesByDifficulty: Record<Difficulty, number>; // Backward compatibility
+  starsByLevel: Record<number, number>; // Level number -> stars
+  bestScoresByLevel: Record<number, number>; // Level number -> score
+  bestTimesByLevel: Record<number, number>; // Level number -> best time
   completedLevels: number[];
   soundEnabled: boolean;
   reducedMotion: boolean;
   theme: 'midnight' | 'neon' | 'amethyst';
+
+  // In-Game Currency & Streaks
+  coins: number;
+  totalCoinsEarned: number;
+  currentStreak: number;
+  longestStreak: number;
+  lastPlayedDate: string | null; // Local YYYY-MM-DD
+  lastStreakRewardDate: string | null; // Local YYYY-MM-DD
+  streakCoinsEarned: number;
+  claimedMilestones: number[];
 }
 
 export interface GameResult {
   isVictory: boolean;
-  difficulty: Difficulty;
+  difficulty: string;
   levelNumber: number;
   score: number;
   baseScore: number;
@@ -69,4 +93,10 @@ export interface GameResult {
   isNewBestScore: boolean;
   isNewBestTime: boolean;
   nextLevelUnlocked: boolean;
+  coinRewards?: CoinRewardBreakdown;
+  streakUpdated?: {
+    currentStreak: number;
+    isNewStreakDay: boolean;
+    streakBonus: number;
+  };
 }

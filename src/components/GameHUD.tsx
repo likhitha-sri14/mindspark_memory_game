@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pause, RotateCcw, Lightbulb, Clock, CheckCircle2, Footprints, Trophy } from 'lucide-react';
+import { Pause, RotateCcw, Lightbulb, Clock, CheckCircle2, Footprints, Trophy, Coins } from 'lucide-react';
 import { DifficultyConfig } from '../types/game';
 import { soundManager } from '../utils/audio';
 
@@ -11,6 +11,7 @@ interface GameHUDProps {
   matchedPairs: number;
   hintsRemaining: number;
   canUseHint: boolean;
+  coins: number;
   onUseHint: () => void;
   onPause: () => void;
   onRestart: () => void;
@@ -24,6 +25,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   matchedPairs,
   hintsRemaining,
   canUseHint,
+  coins,
   onUseHint,
   onPause,
   onRestart,
@@ -45,15 +47,20 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto mb-4 sm:mb-6">
-      {/* Top Bar with Level Info and Controls */}
+      {/* Top Bar with Level Info, Coins and Controls */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md bg-indigo-950/60 border border-indigo-800/50 text-indigo-200">
-            Level {config.levelNumber} · {config.name}
+            Level {config.levelNumber} {config.tierTitle ? `· ${config.tierTitle}` : ''}
           </span>
           <span className="hidden sm:inline-block text-xs text-slate-400">
             {config.pairsCount} Pairs Total
           </span>
+          {/* In-game coins indicator */}
+          <div className="hidden xs:flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-950/30 border border-amber-500/30 text-xs text-amber-200">
+            <Coins className="w-3 h-3 text-yellow-400" />
+            <span className="font-bold tabular-nums">{coins}</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
